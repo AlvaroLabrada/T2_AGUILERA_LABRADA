@@ -1,0 +1,4 @@
+idf_component_register(SRCS "consola.c"
+                       INCLUDE_DIRS "include"
+                       REQUIRES freertos)
+

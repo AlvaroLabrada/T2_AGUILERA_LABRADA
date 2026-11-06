@@ -12,6 +12,10 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /* Lo que el filtro decide de cada flanco. Son también las marcas con las que
  * el programa lo traza. */
 #define MARCA_PULSACION  '*'  /* pulsación nueva: se cuenta */
@@ -37,3 +41,8 @@ void filtro_reiniciar(filtro_t *filtro);
  * Devuelve MARCA_PULSACION, MARCA_REBOTE o MARCA_RECHAZADA. */
 char filtro_flanco(filtro_t *filtro, int64_t us,
                    sigue_pulsado_t sigue_pulsado, void *contexto);
+
+#ifdef __cplusplus
+}
+#endif
+

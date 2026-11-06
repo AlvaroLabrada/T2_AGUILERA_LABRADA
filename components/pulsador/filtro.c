@@ -31,3 +31,4 @@ char filtro_flanco(filtro_t *filtro, int64_t us,
     }
     return MARCA_PULSACION;
 }
+
