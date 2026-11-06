@@ -1,0 +1,15 @@
+Evidencia P1B - Pulsador con interrupcion y antirrebote.
+Diez pulsaciones (varias mantenidas ~1 s) producen diez eventos exactos. El
+contador de pulsaciones validas llega a 10, sin rebotes contados de mas.
+(Se muestran intercaladas las trazas del LED, que corre en paralelo.)
+
+I (1574) pulsador: Pulsacion valida: 1
+I (2183) pulsador: Pulsacion valida: 2
+I (2656) pulsador: Pulsacion valida: 3
+I (3068) pulsador: Pulsacion valida: 4
+I (3401) pulsador: Pulsacion valida: 5
+I (3737) pulsador: Pulsacion valida: 6
+I (4080) pulsador: Pulsacion valida: 7
+I (4401) pulsador: Pulsacion valida: 8
+I (4754) pulsador: Pulsacion valida: 9
+I (5143) pulsador: Pulsacion valida: 10

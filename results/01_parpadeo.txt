@@ -1,0 +1,18 @@
+Evidencia P1A - Salida digital y parpadeo.
+Traza del monitor con conmutaciones consecutivas del LED. La columna "Diferencia"
+es el tiempo medido entre conmutaciones: ~500 ms cada semiciclo => periodo de 1 s.
+
+I (5790) led: Diferencia=500 ms, LED=encendido
+I (6290) led: Diferencia=500 ms, LED=apagado
+I (6790) led: Diferencia=500 ms, LED=encendido
+I (7290) led: Diferencia=499 ms, LED=apagado
+I (7790) led: Diferencia=499 ms, LED=encendido
+I (8290) led: Diferencia=500 ms, LED=apagado
+I (8790) led: Diferencia=500 ms, LED=encendido
+I (9290) led: Diferencia=499 ms, LED=apagado
+I (9790) led: Diferencia=499 ms, LED=encendido
+I (10290) led: Diferencia=500 ms, LED=apagado
+I (10790) led: Diferencia=500 ms, LED=encendido
+I (11290) led: Diferencia=499 ms, LED=apagado
+I (11790) led: Diferencia=499 ms, LED=encendido
+I (12290) led: Diferencia=500 ms, LED=apagado
