@@ -6,7 +6,7 @@ digital con parpadeo, lectura de pulsador con antirrebote, sensor ambiental
 BME280 por I2C y una consola serie por UART0.
 
 ## Integrantes y reparto de roles
-
+EDIT
 | Integrante | Rol |
 |---|---|
 | Heysser Aguilera | Trabajo conjunto en las cuatro prácticas |
