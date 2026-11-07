@@ -19,6 +19,8 @@ static void tarea_carga_1(void *arg) {
     while ((esp_timer_get_time() - inicio) < 20000) {
       // Espera bloqueada hasta completar los 20 ms
     }
+      // 2. Espera BLOQUEADA de 27 ms (cede el procesador)
+      vTaskDelay(pdMS_TO_TICKS(27));    
   }
 }
 //
@@ -31,6 +33,8 @@ static void tarea_carga_2(void *arg) {
     while ((esp_timer_get_time() - inicio) < 20000) {
       // Espera bloqueada hasta completar los 20 ms
     }
+      // 2. Espera BLOQUEADA de 27 ms (cede el procesador)
+      vTaskDelay(pdMS_TO_TICKS(27));    
   }
 }
 
