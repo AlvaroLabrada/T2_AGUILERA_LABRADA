@@ -14,24 +14,19 @@ static void tarea_carga_1(void *arg) {
 
   // Rafaga de calculo de 20ms de CPU activa
 
-  while (1) {
-    int64_t inicio = esp_timer_get_time();
-    while ((esp_timer_get_time() - inicio) < 20000) {
-      // Espera bloqueada hasta completar los 20 ms
+    const int64_t fin = esp_timer_get_time() + (int64_t)ms * 20000; /*hora_actual + duracion (20ms) = hora_de_fin*/ 
+    while (esp_timer_get_time() < fin) { /*Para cuando se alcanza la hora de fin*/
     }
-  }
+  
 }
 //
 static void tarea_carga_2(void *arg) {
 
   // Rafaga de calculo de 20ms de CPU activa
 
-  while (1) {
-    int64_t inicio = esp_timer_get_time();
-    while ((esp_timer_get_time() - inicio) < 20000) {
-      // Espera bloqueada hasta completar los 20 ms
+    const int64_t fin = esp_timer_get_time() + (int64_t)ms * 20000; /*hora_actual + duracion (20ms) = hora_de_fin*/ 
+    while (esp_timer_get_time() < fin) { /*Para cuando se alcanza la hora de fin*/
     }
-  }
 }
 
 void app_main(void) {
