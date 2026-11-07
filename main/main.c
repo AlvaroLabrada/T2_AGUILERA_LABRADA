@@ -4,6 +4,8 @@
 #include "esp_timer.h"
 #include "pines.h"
 #include <stdio.h>
+#include "consola.h"
+#include <string.h>
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -16,34 +18,50 @@ static const char *TAG = "main";
 static uint32_t contador_carga1 = 0;
 static uint32_t contador_carga2 = 0;
 
+typedef enum {
+    MODO_PARADA = 0,
+    MODO_TURNOS,
+    MODO_INANICION,
+    MODO_CORREGIDA
+} modo_carga_t;
+
+static volatile modo_carga_t s_modo = MODO_PARADA;
+
 static void tarea_carga_1(void *arg) {
+    while (1) {
+        if (s_modo == MODO_PARADA) {
+            // Solo duerme 27 ms y vuelve a empezar el bucle
+            vTaskDelay(pdMS_TO_TICKS(27));
+        } else {
+            // Solo calcula si NO está en parada
+            int64_t inicio = esp_timer_get_time();
+            while ((esp_timer_get_time() - inicio) < 20000) {
+            }
+            contador_carga1++;
 
-  // Rafaga de calculo de 20ms de CPU activa
-
-  while (1) {
-    int64_t inicio = esp_timer_get_time();
-    while ((esp_timer_get_time() - inicio) < 20000) {
-      // Espera bloqueada hasta completar los 20 ms
+            // En inanición no duerme; en turnos y corregida duerme 27 ms
+            if (s_modo != MODO_INANICION) {
+                vTaskDelay(pdMS_TO_TICKS(27));
+            }
+        }
     }
-    contador_carga1++;
-    // 2. Espera BLOQUEADA de 27 ms (cede el procesador)
-    vTaskDelay(pdMS_TO_TICKS(27));
-  }
 }
 //
 static void tarea_carga_2(void *arg) {
-
-  // Rafaga de calculo de 20ms de CPU activa
-
-  while (1) {
-    int64_t inicio = esp_timer_get_time();
-    while ((esp_timer_get_time() - inicio) < 20000) {
-      // Espera bloqueada hasta completar los 20 ms
+    while (1) {
+        if (s_modo == MODO_PARADA) {
+            // Solo duerme 100 ms y nada más
+            vTaskDelay(pdMS_TO_TICKS(27));
+        } else {
+            // Solo calcula si NO está en parada
+            int64_t inicio = esp_timer_get_time();
+            while ((esp_timer_get_time() - inicio) < 20000) {
+            }
+            contador_carga2++;
+            // La tarea 2 siempre duerme sus 27 ms
+            vTaskDelay(pdMS_TO_TICKS(27));
+        }
     }
-    contador_carga2++;
-    // 2. Espera BLOQUEADA de 27 ms (cede el procesador)
-    vTaskDelay(pdMS_TO_TICKS(27));
-  }
 }
 
 static void tarea_informe(void *arg) {
@@ -54,10 +72,24 @@ static void tarea_informe(void *arg) {
   }
 }
 
-void app_main(void) {
-  ESP_LOGI(TAG, "Arrancando Taller 2 - Sesión de preparación");
+static void cmd_hola(char *args)
+{
+    printf("¡Hola %s!\n", (args && *args) ? args : "mundo");
+}
 
-  xTaskCreatePinnedToCore(tarea_carga_1, "Tarea1", 3072, NULL, PRIORIDAD_tarea_carga_1, NULL, 0);
-  xTaskCreatePinnedToCore(tarea_carga_2, "Tarea2", 3072, NULL, PRIORIDAD_tarea_carga_2, NULL, 0);
-  xTaskCreatePinnedToCore(tarea_informe, "Informe", 3072, NULL, PRIORIDAD_tarea_informe, NULL, 1);
+void app_main(void)
+{
+    consola_registrar_comando("hola", "Saluda al usuario", cmd_hola);
+    consola_iniciar(6); /* Prioridad 6 de FreeRTOS */
+}
+
+void app_main(void) {
+ESP_LOGI(TAG, "Arrancando Taller 2 - Sesión de preparación");
+
+xTaskCreatePinnedToCore(tarea_carga_1, "Tarea1", 3072, NULL, PRIORIDAD_tarea_carga_1, NULL, 0);
+xTaskCreatePinnedToCore(tarea_carga_2, "Tarea2", 3072, NULL, PRIORIDAD_tarea_carga_2, NULL, 0);
+xTaskCreatePinnedToCore(tarea_informe, "Informe", 3072, NULL, PRIORIDAD_tarea_informe, NULL, 1);
+
+consola_registrar_comando("hola", "Saluda al usuario", cmd_hola);
+consola_iniciar(6); /* Prioridad 6 de FreeRTOS */
 }
