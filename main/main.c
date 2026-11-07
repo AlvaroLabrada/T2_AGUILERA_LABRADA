@@ -23,7 +23,7 @@ static void tarea_carga_1(void *arg) {
     }
     contador_carga1++;
     // 2. Espera BLOQUEADA de 27 ms (cede el procesador)
-    vTaskDelay(pdMS_TO_TICKS(27));
+    //vTaskDelay(pdMS_TO_TICKS(27));
   }
 }
 //
@@ -53,18 +53,7 @@ static void tarea_informe(void *arg) {
 void app_main(void) {
   ESP_LOGI(TAG, "Arrancando Taller 2 - Sesión de preparación");
 
-  /* 1. Inicialización del sensor BME280 con los pines del bus I2C */
-  ESP_LOGI(TAG, "Inicializando sensor BME280 (SDA=%d, SCL=%d)...", PIN_I2C_SDA,
-           PIN_I2C_SCL);
-  esp_err_t err =
-      bme280_port_iniciar(PIN_I2C_SDA, PIN_I2C_SCL, BME280_I2C_ADDR);
-  if (err != ESP_OK) {
-    ESP_LOGE(TAG, "Error al inicializar el sensor BME280: %s",
-             esp_err_to_name(err));
-    return;
-  }
-
-  xTaskCreatePinnedToCore(tarea_carga_1, "Tarea1", 3072, NULL, 2, NULL, 0);
+  xTaskCreatePinnedToCore(tarea_carga_1, "Tarea1", 3072, NULL, 3, NULL, 0);
   xTaskCreatePinnedToCore(tarea_carga_2, "Tarea2", 3072, NULL, 2, NULL, 0);
   xTaskCreatePinnedToCore(tarea_informe, "Informe", 3072, NULL, 1, NULL, 1);
 
