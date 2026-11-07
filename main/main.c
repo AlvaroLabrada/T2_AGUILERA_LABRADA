@@ -53,22 +53,11 @@ static void tarea_informe(void *arg) {
 void app_main(void) {
   ESP_LOGI(TAG, "Arrancando Taller 2 - Sesión de preparación");
 
+<<<<<<< HEAD
   xTaskCreatePinnedToCore(tarea_carga_1, "Tarea1", 3072, NULL, 3, NULL, 0);
+=======
+  xTaskCreatePinnedToCore(tarea_carga_1, "Tarea1", 3072, NULL, 2, NULL, 0);
+>>>>>>> c9cd0992205587245509ccd658a8ab0bc33df6f4
   xTaskCreatePinnedToCore(tarea_carga_2, "Tarea2", 3072, NULL, 2, NULL, 0);
   xTaskCreatePinnedToCore(tarea_informe, "Informe", 3072, NULL, 1, NULL, 1);
-
-  /* 2. Realizar una lectura de prueba y mostrarla en el monitor
-  bme280_datos_t datos;
-  err = bme280_port_leer(&datos);
-  if (err == ESP_OK) {
-    ESP_LOGI(TAG, "--- Lectura inicial del sensor BME280 ---");
-    ESP_LOGI(TAG, "  Temperatura : %.2f °C", datos.temperatura);
-    ESP_LOGI(TAG, "  Presion     : %.2f Pa (%.2f hPa)", datos.presion,
-             datos.presion / 100.0f);
-    ESP_LOGI(TAG, "  Humedad     : %.2f %%", datos.humedad);
-    ESP_LOGI(TAG, "Sensor listo para las practicas del Taller 2.");
-  } else {
-    ESP_LOGE(TAG, "Error al obtener la lectura del sensor: %s",
-             esp_err_to_name(err));
-  } */
 }
