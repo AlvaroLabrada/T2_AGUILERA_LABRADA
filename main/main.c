@@ -23,7 +23,7 @@ static void tarea_carga_1(void *arg) {
     }
     contador_carga1++;
     // 2. Espera BLOQUEADA de 27 ms (cede el procesador)
-    //vTaskDelay(pdMS_TO_TICKS(27));
+    // vTaskDelay(pdMS_TO_TICKS(27));
   }
 }
 //
@@ -53,11 +53,7 @@ static void tarea_informe(void *arg) {
 void app_main(void) {
   ESP_LOGI(TAG, "Arrancando Taller 2 - Sesión de preparación");
 
-<<<<<<< HEAD
   xTaskCreatePinnedToCore(tarea_carga_1, "Tarea1", 3072, NULL, 3, NULL, 0);
-=======
-  xTaskCreatePinnedToCore(tarea_carga_1, "Tarea1", 3072, NULL, 2, NULL, 0);
->>>>>>> c9cd0992205587245509ccd658a8ab0bc33df6f4
   xTaskCreatePinnedToCore(tarea_carga_2, "Tarea2", 3072, NULL, 2, NULL, 0);
   xTaskCreatePinnedToCore(tarea_informe, "Informe", 3072, NULL, 1, NULL, 1);
 }
