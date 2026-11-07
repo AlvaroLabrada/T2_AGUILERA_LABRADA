@@ -5,6 +5,9 @@
 #include "pines.h"
 #include <stdio.h>
 
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+
 static const char *TAG = "main";
 
 static void tarea_carga_1(void *arg) {
@@ -45,7 +48,10 @@ void app_main(void) {
     return;
   }
 
-  /* 2. Realizar una lectura de prueba y mostrarla en el monitor */
+  xTaskCreatePinnedToCore(tarea_carga_1, "Tarea1", 3072, NULL, 2, NULL, 0);
+  xTaskCreatePinnedToCore(tarea_carga_2, "Tarea2", 3072, NULL, 2, NULL, 0);
+
+  /* 2. Realizar una lectura de prueba y mostrarla en el monitor
   bme280_datos_t datos;
   err = bme280_port_leer(&datos);
   if (err == ESP_OK) {
@@ -58,5 +64,5 @@ void app_main(void) {
   } else {
     ESP_LOGE(TAG, "Error al obtener la lectura del sensor: %s",
              esp_err_to_name(err));
-  }
+  } */
 }
