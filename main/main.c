@@ -77,11 +77,6 @@ static void cmd_hola(char *args)
     printf("¡Hola %s!\n", (args && *args) ? args : "mundo");
 }
 
-void app_main(void)
-{
-    consola_registrar_comando("hola", "Saluda al usuario", cmd_hola);
-    consola_iniciar(6); /* Prioridad 6 de FreeRTOS */
-}
 
 void app_main(void) {
 ESP_LOGI(TAG, "Arrancando Taller 2 - Sesión de preparación");
