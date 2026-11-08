@@ -40,7 +40,14 @@ static void tarea_carga_1(void *arg) {
             contador_carga1++;
 
             // En inanición no duerme; en turnos y corregida duerme 27 ms
-            if (s_modo != MODO_INANICION) {
+            if (s_modo == MODO_TURNOS) {
+                vTaskPrioritySet(NULL, 2);
+                vTaskDelay(pdMS_TO_TICKS(27));
+            } else if (s_modo == MODO_INANICION) {
+                vTaskPrioritySet(NULL, 3);
+                // No duerme
+            } else if (s_modo == MODO_CORREGIDA) {
+                vTaskPrioritySet(NULL, 3);
                 vTaskDelay(pdMS_TO_TICKS(27));
             }
         }
@@ -58,6 +65,7 @@ static void tarea_carga_2(void *arg) {
             while ((esp_timer_get_time() - inicio) < 20000) {
             }
             contador_carga2++;
+            
             // La tarea 2 siempre duerme sus 27 ms
             vTaskDelay(pdMS_TO_TICKS(27));
         }
@@ -72,19 +80,23 @@ static void tarea_informe(void *arg) {
   }
 }
 
-static void cmd_hola(char *args)
-{
-    printf("¡Hola %s!\n", (args && *args) ? args : "mundo");
-}
-
+static void cmd_parada(char *args)    { s_modo = MODO_PARADA;    printf("Modo: parada\n"); }
+static void cmd_turnos(char *args)    { s_modo = MODO_TURNOS;    printf("Modo: turnos\n"); }
+static void cmd_inanicion(char *args) { s_modo = MODO_INANICION; printf("Modo: inanicion\n"); }
+static void cmd_corregida(char *args) { s_modo = MODO_CORREGIDA; printf("Modo: corregida\n"); }
 
 void app_main(void) {
-ESP_LOGI(TAG, "Arrancando Taller 2 - Sesión de preparación");
+    ESP_LOGI(TAG, "Arrancando Taller 2 - Sesión de preparación");
 
-xTaskCreatePinnedToCore(tarea_carga_1, "Tarea1", 3072, NULL, PRIORIDAD_tarea_carga_1, NULL, 0);
-xTaskCreatePinnedToCore(tarea_carga_2, "Tarea2", 3072, NULL, PRIORIDAD_tarea_carga_2, NULL, 0);
-xTaskCreatePinnedToCore(tarea_informe, "Informe", 3072, NULL, PRIORIDAD_tarea_informe, NULL, 1);
+    xTaskCreatePinnedToCore(tarea_carga_1, "Tarea1", 3072, NULL, PRIORIDAD_tarea_carga_1, NULL, 0);
+    xTaskCreatePinnedToCore(tarea_carga_2, "Tarea2", 3072, NULL, PRIORIDAD_tarea_carga_2, NULL, 0);
+    xTaskCreatePinnedToCore(tarea_informe, "Informe", 3072, NULL, PRIORIDAD_tarea_informe, NULL, 1);
 
-consola_registrar_comando("hola", "Saluda al usuario", cmd_hola);
-consola_iniciar(6); /* Prioridad 6 de FreeRTOS */
+    // Registramos cada modo directamente como comando
+    consola_registrar_comando("p",    "Modo parada",    cmd_parada);
+    consola_registrar_comando("t",    "Modo turnos",    cmd_turnos);
+    consola_registrar_comando("i", "Modo inanicion", cmd_inanicion);
+    consola_registrar_comando("c", "Modo corregida", cmd_corregida);
+
+    consola_iniciar(6); /* Prioridad 6 de FreeRTOS */
 }
