@@ -10,11 +10,13 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
+#include "ejercicio1.h"
+
 #define PRIORIDAD_tarea_carga_1 3
 #define PRIORIDAD_tarea_carga_2 2 
 #define PRIORIDAD_tarea_informe 1 
 
-static const char *TAG = "main";
+static const char *TAG = "prioridades";
 static uint32_t contador_carga1 = 0;
 static uint32_t contador_carga2 = 0;
 
