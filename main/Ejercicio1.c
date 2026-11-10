@@ -20,14 +20,11 @@ static const char *TAG = "prioridades";
 static uint32_t contador_carga1 = 0;
 static uint32_t contador_carga2 = 0;
 
-typedef enum {
-    MODO_PARADA = 0,
-    MODO_TURNOS,
-    MODO_INANICION,
-    MODO_CORREGIDA
-} modo_carga_t;
-
 static volatile modo_carga_t s_modo = MODO_PARADA;
+
+modo_carga_t carga_obtener_modo(void) {
+    return s_modo;
+}
 
 static void tarea_carga_1(void *arg) {
     while (1) {

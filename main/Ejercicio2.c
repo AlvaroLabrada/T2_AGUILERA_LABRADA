@@ -10,10 +10,11 @@
 
 #include "pines.h"
 #include "bme280_port.h"
+#include "ejercicio1.h"
 #include "ejercicio2.h"
 
-#define PRIORIDAD_SENSOR 4   /* Prioridad 4 (superior a la carga 2/3 por RMS) */
-#define PERIODO_SENSOR_MS      100  /* Periodo de muestreo: 100 ms */
+#define PRIORIDAD_SENSOR 4  
+#define PERIODO_SENSOR_MS      100  /* Periodo de muestreo*/
 #define MUESTRAS_OBJETIVO      50   /* Ventana de 50 activaciones para el resumen */
 
 static const char *TAG = "sensor";
@@ -45,6 +46,7 @@ static void anotar_activacion(int64_t ahora, bool rebase) {
     if (rebase) {
         s_stats.rebases++;
     }
+
     if (s_stats.anterior_us != 0) {
         const int64_t d = ahora - s_stats.anterior_us;
         s_stats.n++;
@@ -52,21 +54,27 @@ static void anotar_activacion(int64_t ahora, bool rebase) {
         if (d > s_stats.max_us) s_stats.max_us = d;
         if (s_stats.min_us == 0 || d < s_stats.min_us) s_stats.min_us = d;
     }
+
     s_stats.anterior_us = ahora;
     portEXIT_CRITICAL(&s_cerrojo_medidas);
 }
 /* [REUTILIZADO de mostrar_resumen]: Formatea con escribir_ms e imprime */
 static void mostrar_resumen_sensor(void) {
     estadistica_sensor_t copia;
+
     portENTER_CRITICAL(&s_cerrojo_medidas);
-    copia = s_stats;
+    copia = s_stats; //Copia local para poder imprimir por la terminal sin bloquear el procesador
     portEXIT_CRITICAL(&s_cerrojo_medidas);
+
     if (copia.n == 0) return;
+    
     char a[16], b[16], c[16], j[16];
     int64_t jitter_us = copia.max_us - copia.min_us;
+    
     escribir_ms(a, sizeof(a), copia.suma_us / copia.n);
     escribir_ms(b, sizeof(b), copia.min_us);
     escribir_ms(c, sizeof(c), copia.max_us);
+    
     escribir_ms(j, sizeof(j), jitter_us);
     printf("\n--- [RESUMEN SENSOR BME280: %" PRIu32 " activaciones] ---\n", copia.n);
     printf("    Periodo nominal: %d ms\n", PERIODO_SENSOR_MS);
@@ -78,17 +86,31 @@ static void mostrar_resumen_sensor(void) {
 static void tarea_sensor(void *arg) {
     TickType_t xLastWakeTime = xTaskGetTickCount();
     const TickType_t xPeriodo = pdMS_TO_TICKS(PERIODO_SENSOR_MS);
+    modo_carga_t modo_anterior = carga_obtener_modo();
+
     while (1) {
         // Espera periódica absoluta (devuelve pdFALSE si hubo rebase)
         bool rebase = (xTaskDelayUntil(&xLastWakeTime, xPeriodo) == pdFALSE);
-        // 1. Marca de tiempo INMEDIATA al despertar (antes de leer el sensor)
+        // 1. Marca de tiempo antes de leer el sensor
         int64_t ahora = esp_timer_get_time();
-        // 2. Anotar la activación (función reutilizada con cerrojo crítico)
+
+        // 2. Si el modo de carga ha cambiado, descartar lo acumulado y reiniciar
+        modo_carga_t modo_actual = carga_obtener_modo();
+        if (modo_actual != modo_anterior) {
+            modo_anterior = modo_actual;
+
+            portENTER_CRITICAL(&s_cerrojo_medidas);
+            s_stats = (estadistica_sensor_t){ 0 }; // Descarta muestras
+            portEXIT_CRITICAL(&s_cerrojo_medidas);
+        }
+        // 3. Anotar la activación (función reutilizada con cerrojo crítico)
         anotar_activacion(ahora, rebase);
-        // 3. Lectura física del sensor BME280
+
+        // 4. Lectura física del sensor BME280
         bme280_datos_t datos;
         bme280_port_leer(&datos);
-        // 4. Al llegar a 50 activaciones, muestra el resumen y reinicia la ventana
+
+        // 5. Al llegar a 50 activaciones, muestra el resumen y reinicia las estadísticas
         if (s_stats.n >= MUESTRAS_OBJETIVO) {
             mostrar_resumen_sensor();
             portENTER_CRITICAL(&s_cerrojo_medidas);

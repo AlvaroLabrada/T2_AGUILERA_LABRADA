@@ -111,3 +111,15 @@ El proyecto se desarrolla con la extensión oficial **ESP-IDF para VS Code** (o 
    ```
 
 Al arrancar, `app_main()` inicializa el bus I2C, detecta el sensor BME280 en `0x76`, calibra el dispositivo y emite por el monitor serie una primera lectura de confirmación de temperatura, presión y humedad.
+
+6.2 P2 
+Si la prioridad del sensor es inferior al resto de tareas se muestra en las imagenes:
+"Prioridad inferior parada.png"
+"Prioridad inferior turnos.png"
+En este caso cuando el sensor termine su tiempo de espera, el planificador no le dejará entrar si una tarea de carfa está en medio de sus 20ms de cálculo.
+
+
+Si la prioridad del sensor es superior al resto de tareas se muestra en las imagenes:
+"Prioridad superior parada.png"
+"Prioridad superior turnos.png"
+En este caso cuando el sensor termine su tiempo de espera, el planificador le deja entrar, ya que su prioridad es superior a cualquier otra tarea.
