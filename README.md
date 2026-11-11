@@ -123,3 +123,24 @@ Si la prioridad del sensor es superior al resto de tareas se muestra en las imag
 "Prioridad superior parada.png"
 "Prioridad superior turnos.png"
 En este caso cuando el sensor termine su tiempo de espera, el planificador le deja entrar, ya que su prioridad es superior a cualquier otra tarea.
+
+---
+
+## 6.3 P3 — Salida modulada con LEDC
+
+**Frecuencia: 5 kHz.** El ojo no detecta parpadeo por encima de ~100 Hz. Con el reloj LEDC a 80 MHz caben `80.000.000 / 5000 = 16.000` pasos por periodo, lo que permite 13 bits. 14 bits necesitarían 16.384 y no caben.
+
+**Resolución: 13 bits.** Da 8192 niveles de brillo, suficiente para transiciones visualmente suaves.
+
+### Modos
+
+| Modo | Duty |
+|---|:---:|
+| `APAGADO` | 0 |
+| `MEDIO` (50 %) | 4096 |
+| `MAXIMO` (100 %) | 8192 |
+| `FADE` (0 → 8192 en 2 s por hardware) | — |
+
+### Por qué el duty se cambia en la tarea y no en la ISR
+
+Las llamadas a LEDC no son seguras desde una ISR: pueden hacer esperas internas. La ISR solo anota el instante con `esp_timer_get_time()` y lo manda a la tarea por una cola. La tarea aplica el antirrebote con `filtro_flanco` y, si la pulsación es válida, cambia el modo.
