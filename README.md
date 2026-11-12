@@ -1,146 +1,133 @@
 # Taller 2 — FreeRTOS: tareas, prioridades y temporización
 
-**Sistemas Empotrados y de Tiempo Real (SEyTR 2026-27)**  
-Máster Universitario en Robótica y Automática  
-Escuela Técnica Superior de Ingeniería Industrial · Ciudad Real  
-Universidad de Castilla-La Mancha
+SEyTR 2026-27 · Máster en Robótica y Automática · UCLM
 
----
+## Integrantes
 
-## 1. Integrantes del equipo
+- Heysser Aguilera
+- Álvaro Labrada Isidro
 
-| Integrante | Rol |
-|---|---|
-| **Heysser Aguilera** | Desarrollo conjunto y depuración |
-| **Álvaro Labrada Isidro** | Desarrollo conjunto y depuración |
+Reparto: P1 y P4 las hicimos entre los dos, P2 Álvaro y P3 Heysser.
 
-El trabajo y la preparación del taller se realizan de forma conjunta y coordinada.
+## Pines y montaje
 
----
+| Elemento | Pin | Notas |
+|---|---|---|
+| LED | GPIO5 | Con resistencia a masa, se enciende con 1 |
+| Pulsador | GPIO4 | A masa con pull-up externa, pulsado = 0 |
+| BME280 SDA | GPIO8 | I2C, dirección 0x76 |
+| BME280 SCL | GPIO9 | I2C a 100 kHz |
+| Potenciómetro | GPIO1 | Reservado para la extensión de P3, no se usa |
+| Consola | UART0 | USB-UART de la placa, 115200 baudios |
 
-## 2. Tabla de asignación de pines
+Placa ESP32-S3-DevKitC-1. El LED va de GPIO5 a masa a través de su resistencia, el pulsador entre GPIO4 y masa con una resistencia de pull-up a 3V3, y el BME280 se alimenta a 3V3 y se conecta por I2C a GPIO8/GPIO9. Todos los pines están definidos en `main/pines.h`.
 
-| Elemento | GPIO / Puerto | Dirección | Descripción y niveles lógicos |
+## Compilar y grabar
+
+```bash
+idf.py set-target esp32s3
+idf.py build
+idf.py -p <puerto> flash monitor
+```
+
+`sdkconfig.defaults` activa las estadísticas de FreeRTOS (`vTaskList`, `vTaskGetRunTimeStats`) y fija la tarea de servicio de temporizadores al núcleo 0 (`CONFIG_FREERTOS_TIMER_TASK_AFFINITY_CPU0=y`), que es lo que pide P4.
+
+## Estructura
+
+- `main/Ejercicio1.c` … `Ejercicio4.c`: una práctica por fichero, `main.c` las arranca en orden.
+- `components/`: `led`, `pulsador` (con el antirrebote), `bme280` (API de Bosch + puerto I2C) y `consola`.
+
+## Tareas
+
+| Tarea | Prioridad | Núcleo | Qué hace |
 |---|:---:|:---:|---|
-| **LED externo** | `GPIO5` | Salida | Con resistencia limitadora en serie a masa. Nivel que enciende: **`1`**. |
-| **Pulsador** | `GPIO4` | Entrada | Pulsador conectado a masa con **resistencia pull-up externa** a 3V3. Pull-up interna desactivada. Nivel pulsado: **`0`**. |
-| **I2C — SDA** | `GPIO8` | Bidireccional | Línea de datos del bus I2C del sensor BME280 (pull-up incorporada en la placa del sensor). |
-| **I2C — SCL** | `GPIO9` | Salida | Línea de reloj del bus I2C (100 kHz maestro). |
-| **Consola** | `UART0` | E/S serie | Conector **USB-to-UART** de la ESP32-S3-DevKitC-1 a 115200 baudios (8N1). |
-| **Potenciómetro (Extensión P3)** | `GPIO1` | Entrada analógica | Canal ADC1_CH0 para control analógico del brillo por modulación LEDC. |
+| consola | 6 | cualquiera | Lee y ejecuta comandos |
+| Sensor | 4 | 0 | Lee el BME280 cada 100 ms |
+| Tarea1 | 3 (2 en turnos) | 0 | Carga: 20 ms de cálculo + 27 ms de espera |
+| Tarea2 | 2 | 0 | Igual que Tarea1 |
+| Pulsador | 3 | 0 | Antirrebote y cambio de modo del LED |
+| MedidaTimers | 3 | 1 | Mide periodo y jitter de los dos temporizadores |
+| Informe | 1 | 1 | Imprime los contadores cada segundo |
+| esp_timer (sistema) | 22 | 0 | Respuesta de la alarma esp_timer |
+| Tmr Svc (sistema) | 1 | 0 | Respuesta del temporizador de FreeRTOS |
 
-> **Principio de diseño:** El fichero [`main/pines.h`](main/pines.h) es la **única fuente de verdad** del proyecto donde se configuran los pines físicos. Ningún componente reutilizable hardcodea números de GPIO.
+Todas las tareas propias tienen 3072 bytes de pila, menos la consola (4096).
 
----
+## Comandos de consola
 
-## 3. Decisiones tomadas de antemano (Capítulo 5)
+| Comando | Qué hace |
+|---|---|
+| `h` | Lista los comandos |
+| `p` / `t` / `i` / `c` | Modo de carga: parada, turnos, inanición, corregida |
+| `r` | Último resumen del sensor en cada modo |
+| `periodo <ms>` | Cambia el periodo de los dos temporizadores |
+| `resumen` | Resumen actual de los temporizadores |
+| `led <0-100>` | Brillo del LED en % |
 
-### 3.1. Periodo de muestreo del sensor BME280
-- **Periodo fijado:** **2000 ms (2,0 s)**.
-- **Justificación técnica:**
-  1. **Tiempo de conversión:** En modo forzado con sobremuestreo $1\times$ en temperatura, presión y humedad, el tiempo de medición que calcula la API oficial de Bosch (`bme280_cal_meas_delay`) es de aproximadamente **9,3 ms**.
-  2. **Dinámica de las magnitudes:** La temperatura, la humedad y la presión atmosférica en interiores son magnitudes físicas de variación lenta cuyas constantes de tiempo se miden en decenas de segundos o minutos. Un periodo de 2 s cumple con holgura el teorema de muestreo para capturar las variaciones reales sin aliasing.
-  3. **Eficiencia y recursos:** Muestrear cada 2 segundos evita el autocalentamiento del sensor (que falsearía las lecturas térmicas), minimiza el consumo energético de la placa y no sobrecarga el bus I2C ni la CPU, permitiendo a FreeRTOS planificar el resto de tareas de usuario y del sistema con mínima latencia. En la Práctica 2 se medirá la regularidad y desviación de este intervalo con `xTaskDelayUntil()`.
+## Justificaciones
 
-### 3.2. Extensión de la Práctica 3 (LEDC y ADC)
-- Se reserva el **`GPIO1` (ADC1 Canal 0)** para la lectura del potenciómetro de U2-S4 que modulará el ciclo de trabajo del LED mediante el periférico LEDC.
+**Periodo del sensor (100 ms).** La medida del BME280 tarda unos 9 ms, así que sobra tiempo. Con 100 ms el resumen de 50 muestras sale cada 5 s y el sensor coincide a menudo con las ráfagas de carga, así se ve bien el efecto de la prioridad.
 
----
+**Prioridades.** La consola es la más alta para que responda aunque haya carga; casi siempre está bloqueada. El sensor (4) va por encima de las cargas para que no le retrasen. Las cargas (3 y 2) son el experimento de P1. Pulsador y MedidaTimers (3) solo despiertan con eventos y trabajan poco. El informe (1) puede esperar.
 
-## 4. Estructura del proyecto
+**LEDC: 5 kHz y 13 bits.** A partir de unos 100 Hz el ojo no ve parpadeo. Con el reloj de 80 MHz a 5 kHz hay 16 000 pasos por periodo, caben 13 bits (8192) pero no 14 (16 384).
 
-El firmware sigue la estructura modular requerida para el Taller 2:
+## P1 — Carga, turnos e inanición
 
-```text
-T2_AGUILERA_LABRADA/
-├── CMakeLists.txt              # Configuración CMake del proyecto (T2_AGUILERA_LABRADA)
-├── sdkconfig.defaults          # Configuración base de FreeRTOS e inspección de tareas
-├── .gitignore                  # Excluye build/, sdkconfig, .vscode/, .devcontainer/ y .clangd
-├── README.md                   # Documentación, integrantes, pines y justificaciones
-├── main/
-│   ├── CMakeLists.txt          # Registro del componente principal
-│   ├── main.c                  # Inicialización y verificación de lectura del sensor
-│   └── pines.h                 # Definición única de pines GPIO y dirección I2C
-└── components/
-    ├── led/                    # Control del LED en pin digital (encender/apagar/conmutar)
-    ├── pulsador/               # Entrada digital del pulsador y filtro antirrebote (filtro.c/h)
-    ├── bme280/                 # API Bosch Sensortec + adaptador de bus I2C (bme280_port.c/h)
-    └── consola/                # Consola serie interactiva por UART0 / STDIN con tabla de comandos
-```
+Dos tareas de carga en el núcleo 0 (20 ms de cálculo y 27 ms de espera) y una de informe en el núcleo 1 que imprime sus contadores cada segundo. El modo se cambia desde la consola.
 
-### Componentes reutilizables en `components/`:
-- **`led`**: Abstracción del LED digital. Desacoplado del número de pin y del montaje físico.
-- **`pulsador`**: Abstracción de la entrada digital con interrupciones por flanco y módulo de **antirrebote** (`filtro_flanco`) con tiempo de guarda y confirmación de nivel.
-- **`bme280`**: Librería oficial de Bosch Sensortec combinada con el puerto I2C maestro para ESP-IDF (`bme280_port`), permitiendo inicializar y leer el sensor de forma limpia.
-- **`consola`**: Tarea de FreeRTOS que recibe comandos por UART0/STDIN, valida longitudes de línea (máx. 64 caracteres) y despacha acciones de forma modular.
+- Turnos ([1](resultados/P1.3_turnos_inicio.png), [2](resultados/P1.3_turnos_regimen.png)): los dos contadores suben igual, unos 21 por segundo (1000 / 47 ms).
+- Inanición ([watchdog](resultados/P1.4_inanicion_watchdog.png)): Tarea1 con prioridad 3 y sin espera no suelta el núcleo 0, IDLE0 no se ejecuta y el watchdog avisa cada 5 s. Esta traza es de antes de pasar el código de `main.c` a `Ejercicio1.c`, por eso sale `main.c:21`.
+- Corregida ([captura](resultados/P1.5_corregida.png)): con la espera de vuelta, los dos contadores avanzan igual y el watchdog deja de saltar.
 
----
+Lo que no funcionó / terminado después: _pendiente_
 
-## 5. Configuración de FreeRTOS (`sdkconfig.defaults`)
+## P2 — Sensor periódico
 
-El archivo [`sdkconfig.defaults`](sdkconfig.defaults) incluye las directivas requeridas para la inspección y depuración de tareas en el Taller 2:
+La tarea del sensor usa `xTaskDelayUntil()` para que los retrasos no se acumulen. Toma la marca de tiempo antes de leer y cada 50 lecturas imprime media, mínimo, máximo y jitter. Al cambiar de modo de carga se empieza de cero.
 
-```ini
-CONFIG_IDF_TARGET="esp32s3"
-CONFIG_FREERTOS_HZ=1000
-CONFIG_FREERTOS_USE_TRACE_FACILITY=y
-CONFIG_FREERTOS_USE_STATS_FORMATTING_FUNCTIONS=y
-CONFIG_FREERTOS_GENERATE_RUN_TIME_STATS=y
-CONFIG_FREERTOS_VTASKLIST_INCLUDE_COREID=y
-```
+| Prioridad del sensor | Carga | Medio | Mín | Máx | Jitter |
+|---|---|---|---|---|---|
+| Inferior ([captura](resultados/P2_sensor_prio_inferior_parada.png)) | No | 100,0 | 99,9 | 100,0 | 28 µs |
+| Inferior ([captura](resultados/P2_sensor_prio_inferior_turnos.png)) | Sí | 99,7 | 93,9 | 127,0 | 33 ms |
+| Superior ([captura](resultados/P2_sensor_prio_superior_parada.png)) | No | 100,0 | 100,0 | 100,0 | 0 µs |
+| Superior ([captura](resultados/P2_sensor_prio_superior_turnos.png)) | Sí | 100,0 | 99,9 | 100,0 | 2 µs |
 
-Estas directivas activan las funciones del kernel de FreeRTOS para generar estadísticas de ejecución en tiempo real (`vTaskGetRunTimeStats`), listar tareas con su afinidad de núcleo (`vTaskList`) y obtener el reparto de carga entre núcleos.
+Con prioridad inferior el sensor tiene que esperar a que la carga acabe su ráfaga y llega hasta 27 ms tarde. La siguiente lectura llega antes porque `xTaskDelayUntil()` compensa, y la media se queda en 100 ms. Con prioridad superior el jitter casi desaparece, por eso dejamos la prioridad 4.
 
----
+Lo que no funcionó / terminado después: _pendiente_
 
-## 6. Compilación, grabación y ejecución
+## P3 — LED con LEDC
 
-El proyecto se desarrolla con la extensión oficial **ESP-IDF para VS Code** (o línea de comandos `idf.py`):
+LEDC a 5 kHz y 13 bits en GPIO5. El pulsador cambia entre apagado (0), medio (4096), máximo (8192) y fade de 0 a máximo en 5 s. Con `led <0-100>` se fija el brillo desde la consola. El máximo es 8192 porque ESP-IDF acepta hasta 2^bits y así el LED queda encendido del todo.
 
-1. **Seleccionar destino (Target):**
-   ```bash
-   idf.py set-target esp32s3
-   ```
-2. **Compilar el proyecto:**
-   ```bash
-   idf.py build
-   ```
-3. **Flashear y abrir monitor serie (conectar por puerto USB-to-UART):**
-   ```bash
-   idf.py -p /dev/tty.usbserial-* flash monitor
-   ```
+La ISR del pulsador solo guarda el instante y lo manda a una cola; la tarea aplica el antirrebote y cambia el LED, porque las funciones de LEDC no se pueden llamar desde una ISR.
 
-Al arrancar, `app_main()` inicializa el bus I2C, detecta el sensor BME280 en `0x76`, calibra el dispositivo y emite por el monitor serie una primera lectura de confirmación de temperatura, presión y humedad.
+Lo que no funcionó / terminado después: _pendiente_
 
-6.2 P2 
-Si la prioridad del sensor es inferior al resto de tareas se muestra en las imagenes:
-"Prioridad inferior parada.png"
-"Prioridad inferior turnos.png"
-En este caso cuando el sensor termine su tiempo de espera, el planificador no le dejará entrar si una tarea de carfa está en medio de sus 20ms de cálculo.
+## P4 — esp_timer frente a temporizador de FreeRTOS
 
+Una alarma `esp_timer` y un temporizador software de FreeRTOS, los dos a 10 ms. Sus respuestas solo mandan la marca de tiempo a una cola, y la tarea MedidaTimers (núcleo 1) calcula el jitter de cada uno.
 
-Si la prioridad del sensor es superior al resto de tareas se muestra en las imagenes:
-"Prioridad superior parada.png"
-"Prioridad superior turnos.png"
-En este caso cuando el sensor termine su tiempo de espera, el planificador le deja entrar, ya que su prioridad es superior a cualquier otra tarea.
+| Temporizador | Carga | Medio | Mín | Máx | Jitter | Rebases |
+|---|---|---|---|---|---|---|
+| esp_timer ([captura](resultados/P4.6_timers_parada.png)) | No | 10,0 | 9,9 | 10,0 | 6 µs | 0 |
+| FreeRTOS ([captura](resultados/P4.6_timers_parada.png)) | No | 9,9 | 9,9 | 10,0 | 28 µs | 0 |
+| esp_timer ([captura](resultados/P4.6_timers_turnos.png)) | Sí | 10,0 | 9,9 | 10,0 | 6 µs | 0 |
+| FreeRTOS ([captura](resultados/P4.6_timers_turnos.png)) | Sí | 10,0 | 0,0 | 31,0 | 31 ms | 11 |
 
----
+`esp_timer` no nota la carga porque su tarea tiene prioridad 22. El de FreeRTOS lo ejecuta Tmr Svc, con prioridad 1 en el mismo núcleo que las cargas, así que espera a que terminen y luego dispara los atrasados seguidos (por eso el mínimo de 0 ms). No se perdió ningún evento en la cola.
 
-## 6.3 P3 — Salida modulada con LEDC
+Lo que no funcionó / terminado después: _pendiente_
 
-**Frecuencia: 5 kHz.** El ojo no detecta parpadeo por encima de ~100 Hz. Con el reloj LEDC a 80 MHz caben `80.000.000 / 5000 = 16.000` pasos por periodo, lo que permite 13 bits. 14 bits necesitarían 16.384 y no caben.
+## Fuentes y herramientas
 
-**Resolución: 13 bits.** Da 8192 niveles de brillo, suficiente para transiciones visualmente suaves.
+- Guion del taller y documentación de ESP-IDF (LEDC, esp_timer, FreeRTOS).
+- API del BME280 de Bosch Sensortec (`components/bme280`).
+- Asistente de IA como ayuda para revisar el código y redactar este README.
 
-### Modos
+## Autoevaluación
 
-| Modo | Duty |
-|---|:---:|
-| `APAGADO` | 0 |
-| `MEDIO` (50 %) | 4096 |
-| `MAXIMO` (100 %) | 8192 |
-| `FADE` (0 → 8192 en 2 s por hardware) | — |
+_Pendiente: rellenar con la rúbrica del guion._
 
-### Por qué el duty se cambia en la tarea y no en la ISR
-
-Las llamadas a LEDC no son seguras desde una ISR: pueden hacer esperas internas. La ISR solo anota el instante con `esp_timer_get_time()` y lo manda a la tarea por una cola. La tarea aplica el antirrebote con `filtro_flanco` y, si la pulsación es válida, cambia el modo.
+Lo que no llegó a funcionar: _pendiente_

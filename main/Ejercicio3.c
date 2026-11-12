@@ -15,14 +15,16 @@
 #include "pines.h"
 #include "pulsador.h"
 
-// 5000 hz está por encima los 20hz que pide el humano
+// 5000 Hz está muy por encima de los ~100 Hz a partir de los que el ojo humano no percibe parpadeo
 #define LEDC_FRECUENCIA 5000
 
-// 13 bits nos da un margen de 8192 niveles para jugar con el brillo
+// 13 bits nos da un margen de 8192 niveles para jugar con el brillo (80 MHz / 5 kHz = 16000 pasos, 14 bits no caben)
 #define LEDC_RESOLUCION LEDC_TIMER_13_BIT
 
+// ESP-IDF admite duty en [0, 2^bits]; 2^13 = 8192 deja la salida siempre encendida (100 %)
 #define DUTY_MAX 8192
 #define DUTY_MEDIO 4096
+#define FADE_TIEMPO_MS 5000
 
 typedef enum { APAGADO, MEDIO, MAXIMO, FADE } modo_led_t;
 const char *nombres_modos[] = {"APAGADO", "MEDIO", "MAXIMO", "FADE"};
@@ -57,17 +59,17 @@ static void cambiar_modo_led(modo_led_t modo) {
     ledc_set_duty_and_update(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, 0, 0);
     break;
   case MEDIO:
-    ledc_set_duty_and_update(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, 4096, 0);
+    ledc_set_duty_and_update(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, DUTY_MEDIO, 0);
     break;
   case MAXIMO:
-    ledc_set_duty_and_update(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, 8192, 0);
+    ledc_set_duty_and_update(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, DUTY_MAX, 0);
     break;
   case FADE:
     ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, 0);
     ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0);
     vTaskDelay(1);
-    ledc_set_fade_time_and_start(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, 8192,
-                                 5000, LEDC_FADE_NO_WAIT);
+    ledc_set_fade_time_and_start(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, DUTY_MAX,
+                                 FADE_TIEMPO_MS, LEDC_FADE_NO_WAIT);
     break;
   }
 }
@@ -109,7 +111,7 @@ static void tarea_pulsador(void *args) {
         char marca = filtro_flanco(&filtro, evento.us_evento, sigue_pulsado, NULL);
         if (marca == MARCA_PULSACION) {
           modo_actual++;
-          if (modo_actual >= FADE) {
+          if (modo_actual > FADE) { // ciclo APAGADO -> MEDIO -> MAXIMO -> FADE -> APAGADO
             modo_actual = APAGADO;
           }
           cambiar_modo_led(modo_actual);
