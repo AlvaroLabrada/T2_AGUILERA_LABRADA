@@ -1,4 +1,6 @@
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_err.h"
@@ -9,7 +11,9 @@
 
 #include "ejercicio1.h" // Para consultar carga_obtener_modo() 
 #include "ejercicio2.h"
+#include "ejercicio3.h"
 #include "ejercicio4.h"
+#include "consola.h"    // Para registrar comandos en tu consola propia
 
 #include "freertos/timers.h"
 #include "freertos/queue.h"
@@ -87,6 +91,46 @@ static void mostrar_resumen_timer(origen_timer_t origen, modo_carga_t modo)
            j, jitter_us, st->rebases, s_perdidas[origen]);
 }
 
+static void cambiar_periodo_timers(int nuevo_periodo_ms)
+{
+    s_periodo_actual_ms = nuevo_periodo_ms;
+
+    // Reiniciar estadísticas de ambos temporizadores al cambiar el periodo
+    s_stats[TIMER_ESP] = (estadistica_sensor_t){ 0 };
+    s_stats[TIMER_SW]  = (estadistica_sensor_t){ 0 };
+
+    // Actualizar periodo de la alarma esp_timer
+    ESP_ERROR_CHECK(esp_timer_restart(s_alarma_esp, (uint64_t)nuevo_periodo_ms * 1000ULL));
+
+    // Actualizar periodo del temporizador software de FreeRTOS
+    xTimerChangePeriod(s_timer_sw, pdMS_TO_TICKS(nuevo_periodo_ms), portMAX_DELAY);
+}
+
+static void cmd_periodo_fn(char *args)
+{
+    if (args == NULL || strlen(args) == 0) {
+        printf("Uso: periodo <nuevo_periodo_ms>\n");
+        return;
+    }
+
+    int nuevo_ms = atoi(args);
+    if (nuevo_ms <= 0) {
+        printf("Error: El periodo debe ser un valor entero positivo en milisegundos.\n");
+        return;
+    }
+
+    cambiar_periodo_timers(nuevo_ms);
+    printf("Periodo de los temporizadores cambiado a %d ms. Medidas reiniciadas.\n", nuevo_ms);
+}
+
+static void cmd_resumen_fn(char *args)
+{
+    (void)args;
+    modo_carga_t modo = carga_obtener_modo();
+    mostrar_resumen_timer(TIMER_ESP, modo);
+    mostrar_resumen_timer(TIMER_SW, modo);
+}
+
 static void tarea_medida_timers(void *arg)
 {
     evento_timer_t ev;
@@ -130,6 +174,25 @@ static void tarea_medida_timers(void *arg)
     }
 }
 
+static void cmd_led_fn(char *args)
+{
+// Comando de consola para cambiar el ciclo de trabajo del LED
+    if (args == NULL || strlen(args) == 0) {
+        printf("Uso: led <0-100>\n");
+        return;
+    }
+// Convertimos de porcentaje (0-100%) al rango de resolución 13 bits (0 - 8192) 
+    int porcentaje = atoi(args);
+    if (porcentaje < 0 || porcentaje > 100) {
+        printf("Error: El porcentaje debe estar entre 0 y 100%%\n");
+        return;
+    }
+
+    // Llama a la función del Ejercicio 3 que encola el cambio de duty de forma segura
+    ejercicio3_enviar_ciclo(porcentaje);
+    printf("Ciclo de trabajo del LED enviado a la tarea gestora: %d%%\n", porcentaje);
+}
+
 void run_ejercicio4(void)
 {
     ESP_LOGI(TAG, "Iniciando Ejercicio 4 (Periodo inicial: %d ms)...", PERIODO_INICIAL_MS);
@@ -158,4 +221,9 @@ void run_ejercicio4(void)
     );
 
     xTimerStart(s_timer_sw, portMAX_DELAY); // Arranca el temporizador software
+
+    // Comandos de consola
+    consola_registrar_comando("periodo", "Cambia el periodo de los timers (ej: periodo 20)", cmd_periodo_fn);
+    consola_registrar_comando("led", "Cambia el ciclo de trabajo del LED (ej: led 50)", cmd_led_fn);
+    consola_registrar_comando("resumen", "Muestra el resumen actual de jitter de los timers", cmd_resumen_fn);
 }

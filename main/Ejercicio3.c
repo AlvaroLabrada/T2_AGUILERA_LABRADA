@@ -15,8 +15,7 @@
 #include "pines.h"
 #include "pulsador.h"
 
-// 5000 hz está por encima los 20hz que pide el humano, por lo que no lo
-// notaremos
+// 5000 hz está por encima los 20hz que pide el humano
 #define LEDC_FRECUENCIA 5000
 
 // 13 bits nos da un margen de 8192 niveles para jugar con el brillo
@@ -31,7 +30,22 @@ const char *nombres_modos[] = {"APAGADO", "MEDIO", "MAXIMO", "FADE"};
 static modo_led_t modo_actual = APAGADO;
 
 static pulsador_t pulsador;
-static QueueHandle_t cola_pulsador;
+
+// Tipos de eventos que puede procesar la tarea del LED
+typedef enum {
+    EVENTO_PULSADOR,
+    EVENTO_DUTY_CONSOLA
+} tipo_evento_led_t;
+
+typedef struct {
+    tipo_evento_led_t tipo;
+    union {
+        int64_t us_evento;  // Para flancos del pulsador
+        int duty_value;     // Para el ciclo de trabajo desde la consola (0 - 8192)
+    };
+} evento_led_t;
+
+static QueueHandle_t cola_eventos_led;
 
 // Función que cambia el modo del led
 static void cambiar_modo_led(modo_led_t modo) {
@@ -49,7 +63,6 @@ static void cambiar_modo_led(modo_led_t modo) {
     ledc_set_duty_and_update(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, 8192, 0);
     break;
   case FADE:
-
     ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, 0);
     ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0);
     vTaskDelay(1);
@@ -62,7 +75,11 @@ static void cambiar_modo_led(modo_led_t modo) {
 static void IRAM_ATTR isr_pulsador(void *arg) {
   int64_t us = esp_timer_get_time();
   BaseType_t despertar = pdFALSE;
-  xQueueSendFromISR(cola_pulsador, &us, &despertar);
+  evento_led_t ev = {
+      .tipo = EVENTO_PULSADOR,
+      .us_evento = us
+  };
+  xQueueSendFromISR(cola_eventos_led, &ev, &despertar);
   if (despertar) {
     portYIELD_FROM_ISR();
   }
@@ -76,9 +93,9 @@ static bool sigue_pulsado(int64_t instante_us, void *contexto) {
   return pulsador_pulsado(&pulsador);
 }
 
-// Tarea que se encarga de detectar las pulsaciones
+// Tarea que se encarga de procesar los eventos del LED (pulsador y consola)
 static void tarea_pulsador(void *args) {
-  int64_t us_evento;
+  evento_led_t evento;
   filtro_t filtro = {
       .guarda_us = 300000,
       .confirmar = true,
@@ -87,17 +104,41 @@ static void tarea_pulsador(void *args) {
   filtro_reiniciar(&filtro);
 
   while (1) {
-    if (xQueueReceive(cola_pulsador, &us_evento, portMAX_DELAY) == pdTRUE) {
-      char marca = filtro_flanco(&filtro, us_evento, sigue_pulsado, NULL);
-      if (marca == MARCA_PULSACION) {
-        modo_actual++;
-        if (modo_actual >= FADE) {
-          modo_actual = APAGADO;
+    if (xQueueReceive(cola_eventos_led, &evento, portMAX_DELAY) == pdTRUE) {
+      if (evento.tipo == EVENTO_PULSADOR) {
+        char marca = filtro_flanco(&filtro, evento.us_evento, sigue_pulsado, NULL);
+        if (marca == MARCA_PULSACION) {
+          modo_actual++;
+          if (modo_actual >= FADE) {
+            modo_actual = APAGADO;
+          }
+          cambiar_modo_led(modo_actual);
         }
-        cambiar_modo_led(modo_actual);
+      } else if (evento.tipo == EVENTO_DUTY_CONSOLA) {
+        // Detiene cualquier fade activo y aplica directamente el duty recibido
+        ledc_fade_stop(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0);
+        ledc_set_duty_and_update(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, evento.duty_value, 0);
+        ESP_LOGI("P3", "Ciclo de trabajo actualizado por consola a duty: %d", evento.duty_value);
       }
     }
   }
+}
+
+// Función pública para que la consola (Ejercicio 4) envíe el ciclo de trabajo sin bloquear
+void ejercicio3_enviar_ciclo(int porcentaje) {
+    if (porcentaje < 0) porcentaje = 0;
+    if (porcentaje > 100) porcentaje = 100;
+
+    // Convertimos de porcentaje (0-100%) al rango de resolución 13 bits (0 - 8192)
+    int duty = (porcentaje * DUTY_MAX) / 100;
+
+    evento_led_t ev = {
+        .tipo = EVENTO_DUTY_CONSOLA,
+        .duty_value = duty
+    };
+    
+    // Envío seguro a la cola desde la tarea de la consola (0 ticks de espera)
+    xQueueSend(cola_eventos_led, &ev, 0);
 }
 
 void run_ejercicio3(void) {
@@ -132,8 +173,8 @@ void run_ejercicio3(void) {
   ESP_ERROR_CHECK(
       pulsador_iniciar(&pulsador, PIN_PULSADOR, PULSADOR_NIVEL_PULSADO));
 
-  // Creamos la cola
-  cola_pulsador = xQueueCreate(10, sizeof(int64_t));
+  // Creamos la cola de eventos (ahora gestiona estructura evento_led_t)
+  cola_eventos_led = xQueueCreate(10, sizeof(evento_led_t));
   gpio_install_isr_service(0);
   gpio_isr_handler_add(PIN_PULSADOR, isr_pulsador, NULL);
 
