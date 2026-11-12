@@ -80,7 +80,7 @@ Dos tareas de carga en el núcleo 0 (20 ms de cálculo y 27 ms de espera) y una 
 - Inanición ([watchdog](resultados/P1.4_inanicion_watchdog.png)): Tarea1 con prioridad 3 y sin espera no suelta el núcleo 0, IDLE0 no se ejecuta y el watchdog avisa cada 5 s. Esta traza es de antes de pasar el código de `main.c` a `Ejercicio1.c`, por eso sale `main.c:21`.
 - Corregida ([captura](resultados/P1.5_corregida.png)): con la espera de vuelta, los dos contadores avanzan igual y el watchdog deja de saltar.
 
-Lo que no funcionó / terminado después: _pendiente_
+Lo que no funcionó / terminado después: todo funcionó en el taller. Después solo se movió el código de `main.c` a `Ejercicio1.c`.
 
 ## P2 — Sensor periódico
 
@@ -95,7 +95,7 @@ La tarea del sensor usa `xTaskDelayUntil()` para que los retrasos no se acumulen
 
 Con prioridad inferior el sensor tiene que esperar a que la carga acabe su ráfaga y llega hasta 27 ms tarde. La siguiente lectura llega antes porque `xTaskDelayUntil()` compensa, y la media se queda en 100 ms. Con prioridad superior el jitter casi desaparece, por eso dejamos la prioridad 4.
 
-Lo que no funcionó / terminado después: _pendiente_
+Lo que no funcionó / terminado después: todo funcionó en el taller.
 
 ## P3 — LED con LEDC
 
@@ -103,7 +103,7 @@ LEDC a 5 kHz y 13 bits en GPIO5. El pulsador cambia entre apagado (0), medio (40
 
 La ISR del pulsador solo guarda el instante y lo manda a una cola; la tarea aplica el antirrebote y cambia el LED, porque las funciones de LEDC no se pueden llamar desde una ISR.
 
-Lo que no funcionó / terminado después: _pendiente_
+Lo que no funcionó / terminado después: al pasar de máximo a fade no se veía el cambio, porque el fade arrancaba sin que el duty llegara a ponerse a 0. Se arregló poniendo el duty a 0 y esperando un tick (`vTaskDelay(1)`) antes de lanzar el fade. Después del taller también se corrigió la condición del ciclo del pulsador, que volvía a apagado sin llegar a fade. La extensión del potenciómetro no se hizo.
 
 ## P4 — esp_timer frente a temporizador de FreeRTOS
 
@@ -118,7 +118,7 @@ Una alarma `esp_timer` y un temporizador software de FreeRTOS, los dos a 10 ms. 
 
 `esp_timer` no nota la carga porque su tarea tiene prioridad 22. El de FreeRTOS lo ejecuta Tmr Svc, con prioridad 1 en el mismo núcleo que las cargas, así que espera a que terminen y luego dispara los atrasados seguidos (por eso el mínimo de 0 ms). No se perdió ningún evento en la cola.
 
-Lo que no funcionó / terminado después: _pendiente_
+Lo que no funcionó / terminado después: todo funcionó en el taller.
 
 ## Fuentes y herramientas
 
@@ -130,4 +130,4 @@ Lo que no funcionó / terminado después: _pendiente_
 
 _Pendiente: rellenar con la rúbrica del guion._
 
-Lo que no llegó a funcionar: _pendiente_
+Lo que no llegó a funcionar: en P3, el paso de máximo a fade no se veía hasta añadir una espera de un tick antes del fade.
