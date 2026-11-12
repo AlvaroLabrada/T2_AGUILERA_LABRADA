@@ -17,54 +17,50 @@
 
 #define PRIORIDAD_SENSOR 4  
 #define PERIODO_SENSOR_MS      100  /* Periodo de muestreo*/
-#define MUESTRAS_OBJETIVO      50   /* Ventana de 50 activaciones para el resumen */
 
 static const char *TAG = "sensor";
 
-static const char *NOMBRES_MODOS[4] = { "PARADA", "TURNOS", "INANICION", "CORREGIDA" };
+const char *NOMBRES_MODOS[4] = { "PARADA", "TURNOS", "INANICION", "CORREGIDA" };
 
 /* [REUTILIZADO]: Cerrojo crítico para proteger las variables compartidas */
 static portMUX_TYPE s_cerrojo_medidas = portMUX_INITIALIZER_UNLOCKED;
 
-typedef struct {
-    uint32_t n;              /* Cuántas activaciones se han medido */
-    int64_t  suma_us;        /* Suma de intervalos (para la media) */
-    int64_t  max_us;         /* Intervalo más largo observado */
-    int64_t  min_us;         /* Intervalo más corto observado */
-    int64_t  anterior_us;    /* Marca de tiempo de la activación previa */
-    uint32_t rebases;        /* Activaciones que se retrasaron (pdFALSE en delay) */
-} estadistica_sensor_t;
 static estadistica_sensor_t s_stats = { 0 };
 
 /* Array donde guardamos un resumen por cada modo (Paso 6) */
 static estadistica_sensor_t s_resumen_modo[4] = { 0 };
 
 /* [REUTILIZADO]: Formateador de microsegundos a milisegundos con coma decimal */
-static void escribir_ms(char *destino, size_t tam, int64_t us)
+void escribir_ms(char *destino, size_t tam, int64_t us)
 {
     if (us < 0) us = 0; /*Impide valores negativos por si hay un fallo*/
     snprintf(destino, tam, "%" PRId64 ",%" PRId64, us / 1000, (us % 1000) / 100); //Escribir en ms con 1 decimal
     /*%" PRId64 ": Significa: «imprime un entero de 64 bits con signo (int64_t) de forma portable»*/
 }
 
-/* [REUTILIZADO de anotar_conmutacion_led]: Calcula intervalo, min, max y media */
+/* Función genérica compartida para P2 y P4 reutilizada de anotar_conmutacion_led: Calcula intervalo, min, max y media */
+void estadistica_anotar(estadistica_sensor_t *st, int64_t ahora, bool rebase)
+{
+    if (rebase) {
+        st->rebases++;
+    }
+    if (st->anterior_us != 0) {
+        const int64_t d = ahora - st->anterior_us;
+        st->n++;
+        st->suma_us += d;
+        if (d > st->max_us) st->max_us = d;
+        if (st->min_us == 0 || d < st->min_us) st->min_us = d;
+    }
+    st->anterior_us = ahora;
+}
+
+
 static void anotar_activacion(int64_t ahora, bool rebase) {
     portENTER_CRITICAL(&s_cerrojo_medidas);
-    if (rebase) {
-        s_stats.rebases++;
-    }
-
-    if (s_stats.anterior_us != 0) {
-        const int64_t d = ahora - s_stats.anterior_us;
-        s_stats.n++;
-        s_stats.suma_us += d;
-        if (d > s_stats.max_us) s_stats.max_us = d;
-        if (s_stats.min_us == 0 || d < s_stats.min_us) s_stats.min_us = d;
-    }
-
-    s_stats.anterior_us = ahora;
+    estadistica_anotar(&s_stats, ahora, rebase);
     portEXIT_CRITICAL(&s_cerrojo_medidas);
 }
+
 /* [REUTILIZADO de mostrar_resumen]: Formatea con escribir_ms e imprime */
 static void mostrar_resumen_sensor(modo_carga_t modo) {
     estadistica_sensor_t copia;
