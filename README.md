@@ -118,13 +118,12 @@ Una alarma `esp_timer` y un temporizador software de FreeRTOS, los dos a 10 ms. 
 
 `esp_timer` no nota la carga porque su tarea tiene prioridad 22. El de FreeRTOS lo ejecuta Tmr Svc, con prioridad 1 en el mismo núcleo que las cargas, así que espera a que terminen y luego dispara los atrasados seguidos (por eso el mínimo de 0 ms). No se perdió ningún evento en la cola.
 
-Lo que no funcionó / terminado después: todo funcionó en el taller.
 
 ## Fuentes y herramientas
 
 - Guion del taller y documentación de ESP-IDF (LEDC, esp_timer, FreeRTOS).
 - API del BME280 de Bosch Sensortec (`components/bme280`).
-- Asistente de IA como ayuda para revisar el código y redactar este README.
+- Asistente de IA como ayuda para revisar y corregir el código, así como para redactar este README.
 
 ## Autoevaluación
 

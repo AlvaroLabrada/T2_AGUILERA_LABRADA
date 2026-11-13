@@ -1,8 +1,6 @@
-#include "bme280_port.h"
 #include "esp_err.h"
 #include "esp_log.h"
 #include "esp_timer.h"
-#include "pines.h"
 #include <stdio.h>
 #include "consola.h"
 #include <string.h>
