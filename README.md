@@ -34,24 +34,25 @@ idf.py -p <puerto> flash monitor
 
 ## Estructura
 
-- `main/Ejercicio1.c` … `Ejercicio4.c`: una práctica por fichero, `main.c` las arranca en orden.
-- `components/`: `led`, `pulsador` (con el antirrebote), `bme280` (API de Bosch + puerto I2C) y `consola`.
+- `main/main.c`: solo arranca las cuatro prácticas en orden. `main/pines.h` tiene todos los pines.
+- `components/ejercicio1` … `ejercicio4`: una práctica por componente, cada una con su etiqueta de traza.
+- `components/led`, `pulsador` (con el antirrebote), `bme280` (API de Bosch + puerto I2C) y `consola`.
 
 ## Tareas
 
-| Tarea | Prioridad | Núcleo | Qué hace |
-|---|:---:|:---:|---|
-| consola | 6 | cualquiera | Lee y ejecuta comandos |
-| Sensor | 4 | 0 | Lee el BME280 cada 100 ms |
-| Tarea1 | 3 (2 en turnos) | 0 | Carga: 20 ms de cálculo + 27 ms de espera |
-| Tarea2 | 2 | 0 | Igual que Tarea1 |
-| Pulsador | 3 | 0 | Antirrebote y cambio de modo del LED |
-| MedidaTimers | 3 | 1 | Mide periodo y jitter de los dos temporizadores |
-| Informe | 1 | 1 | Imprime los contadores cada segundo |
-| esp_timer (sistema) | 22 | 0 | Respuesta de la alarma esp_timer |
-| Tmr Svc (sistema) | 1 | 0 | Respuesta del temporizador de FreeRTOS |
+| Tarea | Prioridad | Periodo | Núcleo | Pila (B) | Mín. libre (B) | Por qué esa prioridad |
+|---|:---:|---|:---:|:---:|:---:|---|
+| consola | 6 | — (espera teclas) | cualquiera | 4096 | 2848 | Que responda aunque haya carga; casi siempre bloqueada |
+| Sensor | 4 | 100 ms | 0 | 3072 | 1804 | Por encima de las cargas para que no le retrasen |
+| Tarea1 | 3 (2 en turnos) | 47 ms | 0 | 3072 | 2376 | Carga del experimento de P1 |
+| Tarea2 | 2 | 47 ms | 0 | 3072 | 2384 | Carga del experimento de P1 |
+| Pulsador | 3 | — (eventos) | 0 | 3072 | 2288 | Despierta con eventos y trabaja poco |
+| MedidaTimers | 3 | — (eventos) | 1 | 3072 | 1692 | Despierta con eventos y trabaja poco |
+| Informe | 1 | 1 s | 1 | 3072 | 1912 | Solo imprime, puede esperar |
+| esp_timer (sistema) | 22 | — | 0 | 3584 | 3396 | Fijada por ESP-IDF |
+| Tmr Svc (sistema) | 1 | — | 0 | 2048 | 1328 | Por defecto de FreeRTOS |
 
-Todas las tareas propias tienen 3072 bytes de pila, menos la consola (4096).
+La columna "Mín. libre" es la marca de agua de la pila (el mínimo de las capturas de `tareas`, en bytes). Ninguna tarea baja de 1300 bytes libres, así que todas van sobradas; la que más usa es MedidaTimers (1692 libres de 3072).
 
 ## Comandos de consola
 
@@ -63,6 +64,7 @@ Todas las tareas propias tienen 3072 bytes de pila, menos la consola (4096).
 | `periodo <ms>` | Cambia el periodo de los dos temporizadores |
 | `resumen` | Resumen actual de los temporizadores |
 | `led <0-100>` | Brillo del LED en % |
+| `tareas` | Lista de tareas (`vTaskList`) y reparto del procesador (`vTaskGetRunTimeStats`) |
 
 ## Justificaciones
 
@@ -118,6 +120,21 @@ Una alarma `esp_timer` y un temporizador software de FreeRTOS, los dos a 10 ms. 
 
 `esp_timer` no nota la carga porque su tarea tiene prioridad 22. El de FreeRTOS lo ejecuta Tmr Svc, con prioridad 1 en el mismo núcleo que las cargas, así que espera a que terminen y luego dispara los atrasados seguidos (por eso el mínimo de 0 ms). No se perdió ningún evento en la cola.
 
+En la [sesión de consola](resultados/integracion_sesion_consola.png) se cambia el periodo a 20 ms con carga y se piden los resúmenes: esp_timer sigue sin jitter y el de FreeRTOS tiene 30 ms. También se cambia el brillo del LED con `led 50` y `led 0`.
+
+
+## Lista de tareas y reparto del procesador
+
+El comando `tareas` imprime `vTaskList()` y `vTaskGetRunTimeStats()`. Hicimos dos capturas separadas unos 10 s en cada modo ([parada](resultados/integracion_tareas_parada.png), [turnos](resultados/integracion_tareas_turnos.png)); la carga de un núcleo en ese intervalo es el 100 % menos lo que ocupó su IDLE.
+
+| Modo | Núcleo 0 | Núcleo 1 |
+|---|:---:|:---:|
+| Parada | ~1 % | ~5 % |
+| Turnos | ~65 % | ~4 % |
+
+Las tareas propias están casi siempre bloqueadas (B), con la prioridad y el núcleo que les damos en el código (la consola sale con -1 porque no tiene afinidad) y con más de 1600 bytes de pila libres. En turnos, Tarea1 y Tarea2 se llevan el núcleo 0 y el 1 no cambia. No llega al 85 % (2 × 20/47) porque la ráfaga de 20 ms se mide con el reloj: cuando las dos calculan a la vez se reparten la CPU.
+
+[Sesión de consola](resultados/integracion_sesion_consola.png) con `h`, `r`, `periodo 20`, `resumen`, `led 50`, `led 0`, `periodo 10` y `p` (se han quitado los mensajes periódicos para que se lea).
 
 ## Fuentes y herramientas
 
@@ -125,8 +142,6 @@ Una alarma `esp_timer` y un temporizador software de FreeRTOS, los dos a 10 ms. 
 - API del BME280 de Bosch Sensortec (`components/bme280`).
 - Asistente de IA como ayuda para revisar y corregir el código, así como para redactar este README.
 
-## Autoevaluación
+## Lo que no llegó a funcionar
 
-_Pendiente: rellenar con la rúbrica del guion._
-
-Lo que no llegó a funcionar: en P3, el paso de máximo a fade no se veía hasta añadir una espera de un tick antes del fade.
+En P3, el paso de máximo a fade no se veía hasta añadir una espera de un tick antes del fade.

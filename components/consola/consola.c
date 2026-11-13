@@ -24,6 +24,26 @@ static void cmd_ayuda_builtin(char *args)
     printf("\n");
 }
 
+/* Búfer compartido por vTaskList() y vTaskGetRunTimeStats(): unos 40 bytes por tarea
+ * según task.h; con ~16 tareas en el sistema 1536 bytes dejan margen. Es estático para
+ * no gastar pila de la tarea de consola. */
+static char s_buf_tareas[1536];
+
+/* Comando 'tareas': lista de tareas y reparto del procesador desde el arranque */
+static void cmd_tareas_builtin(char *args)
+{
+    (void)args;
+
+    vTaskList(s_buf_tareas);
+    printf("\nNombre          \tEstado\tPrio\tPila\tNum\tNucleo\n");
+    printf("               (X=ejecutando B=bloqueada R=lista S=suspendida D=borrada; Pila = minimo libre en bytes)\n");
+    printf("%s", s_buf_tareas);
+
+    vTaskGetRunTimeStats(s_buf_tareas);
+    printf("\nNombre          \tTiempo (us)\t%% CPU\n");
+    printf("%s\n", s_buf_tareas);
+}
+
 esp_err_t consola_registrar_comando(const char *nombre, const char *ayuda, comando_fn_t ejecutar)
 {
     if (nombre == NULL || ejecutar == NULL) {
@@ -126,6 +146,7 @@ esp_err_t consola_iniciar(int prioridad)
 {
     /* Registrar el comando de ayuda interno 'h' si no está registrado */
     consola_registrar_comando("h", "Muestra esta lista de comandos", cmd_ayuda_builtin);
+    consola_registrar_comando("tareas", "Lista de tareas y reparto del procesador", cmd_tareas_builtin);
 
     const BaseType_t res = xTaskCreate(tarea_consola, "consola", 4096, NULL, prioridad, NULL);
     if (res != pdPASS) {
